@@ -1,0 +1,36 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: Sample SAM Template for powertools-quickstart
+Globals:
+    Function:
+        Timeout: 10
+
+Parameters:
+    ConnectionString:
+        Type: String
+        Description: Database Connection String
+    DbName:
+        Type: String
+        Description: Database Name
+        
+Resources:
+    ChatSentimentFunction:
+        Type: AWS::Serverless::Function
+        Properties:
+            CodeUri: chat_sentiment_analysis/
+            Handler: app.lambda_handler
+            Runtime: python3.10
+            Environment:
+              Variables:
+                ConnectionString: !Ref ConnectionString
+                DbName: !Ref DbName
+            Events:
+                ChatSentimentAnalysis:
+                    Type: Api
+                    Properties:
+                        Path: /chat/{chat_id}
+                        Method: get
+Outputs:
+    ChatSentimentAPI:
+        Description: "API Gateway endpoint URL for Prod stage for Chat function"
+        Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/chat/"
