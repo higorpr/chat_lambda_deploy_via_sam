@@ -1,7 +1,7 @@
 # User defined
 .aws-sam
-deployEnv.json
 env.json
+previous_code
 # Created by https://www.gitignore.io/api/osx,linux,python,windows,pycharm,visualstudiocode
 
 ### Linux ###

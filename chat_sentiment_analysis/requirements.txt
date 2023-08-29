@@ -1,7 +1,8 @@
-requests
 pandas
 emoji
 leia-br
 pymongo
 vaderSentiment
 aws-lambda-powertools[tracer]
+reportlab
+boto3

@@ -1,11 +1,17 @@
 import pandas as pd
 import emoji
+import boto3
 
 from errors import CustomException
 from bson.objectid import ObjectId
+from io import BytesIO
 from LeIA import SentimentIntensityAnalyzer as LeiaAnalyzer
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer as EmojiAnalyzer
 from connection import messages_db, chats_db
+
+from reportlab.lib.pagesizes import letter
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, ListFlowable, PageBreak
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle as PS
 
 def chat_id_verification(chat_id:str):
     inexistant_chat_exception = CustomException('Inexistant chat_id')
@@ -40,12 +46,8 @@ def get_chat_messages(chat_id:str):
 
     return messages
 
-def import_data(chat_id:str):
+def import_data(messages:list):
     order = 1
-
-    chat_id_verification(chat_id)
-
-    messages = get_chat_messages(chat_id)
 
     messages_dict = {'id':[],'text':[],'source':[], 'send_date':[],"order_in_chat":[]}
 
@@ -70,7 +72,6 @@ def import_data(chat_id:str):
         # Get message datetime
         messages_dict['send_date'].append(m['timestamp'])
 
-    
     messages_df = pd.DataFrame(data=messages_dict)
 
     return messages_df
@@ -203,3 +204,159 @@ def generate_sentiment_label(coef:float):
         label = 'Satisfeito'
     
     return label
+
+def format_chat(messages:list):
+    chat_text = []
+
+    for m in messages:
+        # Get message source
+        if m['is_out']:
+            attendant_message = f"[Atendente] ({m['timestamp']}) {m['text']}"
+            chat_text.append(attendant_message)
+        else:
+            client_message = f"[Cliente] ({m['timestamp']}) {m['text']}"
+            chat_text.append(client_message)
+
+    return chat_text
+
+def create_report(formated_chat:list, sentiment_coef:float) :
+    # Create byte buffer to hold report information
+    pdf_buffer = BytesIO()
+    # Create document
+    doc = SimpleDocTemplate(pdf_buffer, pagesize=letter)    
+    # Report element list
+    elements = []
+    # Styles Class Instance
+    styles = getSampleStyleSheet()
+    # Creates a style for centered text
+    centered_style = PS(name='CenteredStyle', parent=styles['Heading3'], alignment=1)
+    
+    # TITLE  
+    title = Paragraph('Relatório de Análise de Sentimento do Chat', styles['Title'])
+    elements.append(title)
+    elements.append(Spacer(1,20))
+    
+    # SECTION - "Method for Sentiment Analysis"
+    section_title = Paragraph('Método para Análise de Sentimento',styles['Heading1'])
+    elements.append(section_title)
+    
+    # SUBSECTION - "Method Description"
+    subtitle = Paragraph('Descrição do Método',styles['Heading2'])
+    elements.append(subtitle)
+    elements.append(Spacer(1,10))
+    
+    # TEXT - "method description"
+    method_introduction = 'O método para a obtenção da estimativa do sentimento de um cliente durante '\
+    'uma interação com o atendimento consiste em :'
+    
+    text = Paragraph(method_introduction,styles['Normal'])
+    elements.append(text)
+    elements.append(Spacer(1,10))    
+    
+    method_list = [
+        'Análise do sentimento de todas as mensagens dos clientes',
+        'Cálculo do peso de cada mensagem',
+        'Cálculo da média do sentimento do chat completo',
+        'Interpretação do resultado da análise'
+    ]
+    
+    numbered_list = ListFlowable(
+        [Paragraph(f"{item}", styles['Normal']) for i, item in enumerate(method_list, start=1)],
+        bulletType='bullet',
+        leftIndent=20,
+    ) 
+    elements.append(numbered_list)
+    elements.append(Spacer(1,10))
+    
+    entry_1 = 'O primeiro passo consiste na aplicação do modelo de aprendizado de máquina treinado para a '\
+    'classificação do sentimento do cliente em cada uma das mensagens enviadas para o atendente, gerando assim '\
+    'um nível estimado de satisfação do cliente que varia entre "Satisfeito", "Levemente Satisfeito", "Neutro"'\
+    ', "Levemente Insatisfeito" ou "Insatisfeito".'
+    
+    text = Paragraph(entry_1,styles['Normal'])
+    elements.append(text)
+    elements.append(Spacer(1,10))
+    
+    entry_2 = 'O que se segue é a transformação das classificações dos sentimentos individuais '\
+    'expressos em cada uma das mensagens em pesos matemáticos que compõem o sentimento do cliente '\
+    'durante todo o atendimento. Esses pesos são definidos seguindo-se a metodologia formulada internamente'\
+    ' pelo time de Inteligência Artificial da ChatGuru.'
+    
+    text = Paragraph(entry_2,styles['Normal'])
+    elements.append(text)
+    elements.append(Spacer(1,10))
+    
+    entry_3 = 'Usando-se parâmetros obtidos do chat completo e do modelo de IA da ChatGuru, é calculado um '\
+    'coeficiente numérico de satisfação do atendimento completo.'
+    
+    text = Paragraph(entry_3,styles['Normal'])
+    elements.append(text)
+    elements.append(Spacer(1,10))
+    
+    entry_4 = 'Por fim, esse coeficiente de satisfação é interpretado em termos não-matemáticos para ser '\
+    'apreciado pelo contratante do serviço.'
+    
+    text = Paragraph(entry_4,styles['Normal'])
+    elements.append(text)
+    elements.append(Spacer(1,20))
+    elements.append(PageBreak())
+    
+    # SECTION - "Sentiment Analysis"
+    section_title = Paragraph('Análise de Sentimento',styles['Heading1'])
+    elements.append(section_title)
+    
+    # SUBSECTION - "Chat Presentation"
+    subtitle = Paragraph('Apresentação do Chat',styles['Heading2'])
+    elements.append(subtitle)
+    elements.append(Spacer(1,10))
+    
+    # TEXT - "chat content"
+    for line in formated_chat:
+        chat = Paragraph(line, styles['Normal'])
+        elements.append(chat)
+        elements.append(Spacer(1,5))
+    
+    # SUBSECTION - "Analysis result"
+    subtitle = Paragraph('Resultados da Análise',styles['Heading2'])
+    elements.append(subtitle)
+    elements.append(Spacer(1,10))
+    
+    # TEXT - "analysis result intro"
+    analysis_result = 'Ao se aplicar o método já descrito neste relatório, o coeficiente de satisfação do usuário na '\
+    'conversa apresentada como objeto de análise foi de:'
+    text = Paragraph(analysis_result, styles['Normal'])
+    elements.append(text)
+    elements.append(Spacer(1,8))
+    
+    # TEXT - "sentiment coefficient"
+    str_coef = str(round(sentiment_coef,3))
+    text = f"coeficiente de satisfação = {str_coef}"
+    centered_text = Paragraph(text, centered_style)
+    elements.append(centered_text)
+    elements.append(Spacer(1,10))
+    
+    # TEXT - "result interpretation"
+    sentiment_label = generate_sentiment_label(sentiment_coef)
+    interpretation = f"Dado o coeficiente de satisfação apresentado, podemos estimar que o cliente se sentiu:"
+    text = Paragraph(interpretation, styles['Normal'])
+    elements.append(text)
+    
+    centered_text = Paragraph(sentiment_label, centered_style)
+    elements.append(centered_text)
+    elements.append(Spacer(1,10))
+
+    # Build the rest of the report
+    doc.build(elements)
+    
+    # Move buffer position to the beginning
+    pdf_buffer.seek(0)
+    
+    return pdf_buffer
+    
+def update_file_to_s3(data, s3_bucket, s3_path):
+        
+    s3 = boto3.client('s3')
+    try:
+        s3.upload_fileobj(data, s3_bucket, s3_path)
+    except Exception as e:
+        raise e

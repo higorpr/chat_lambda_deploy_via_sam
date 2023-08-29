@@ -3,7 +3,7 @@ Transform: AWS::Serverless-2016-10-31
 Description: Sample SAM Template for powertools-quickstart
 Globals:
     Function:
-        Timeout: 10
+        Timeout: 20
 
 Parameters:
     ConnectionString:
@@ -12,6 +12,9 @@ Parameters:
     DbName:
         Type: String
         Description: Database Name
+    BucketName:
+        Type: String
+        Description: S3 Bucket Name
         
 Resources:
     ChatSentimentFunction:
@@ -20,10 +23,12 @@ Resources:
             CodeUri: chat_sentiment_analysis/
             Handler: app.lambda_handler
             Runtime: python3.10
+            # Tracing: Active
             Environment:
               Variables:
                 ConnectionString: !Ref ConnectionString
                 DbName: !Ref DbName
+                BucketName: !Ref BucketName
             Events:
                 ChatSentimentAnalysis:
                     Type: Api
