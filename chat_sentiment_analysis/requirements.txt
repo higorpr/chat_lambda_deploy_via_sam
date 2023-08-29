@@ -6,3 +6,4 @@ vaderSentiment
 aws-lambda-powertools[tracer]
 reportlab
 boto3
+pymiddy
